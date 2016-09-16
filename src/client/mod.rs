@@ -79,7 +79,7 @@ pub struct VaultClient<'a, T>
     /// `hyper::Client`
     client: Client,
     /// Data
-    pub data: VaultResponse<T>,
+    pub data: Option<VaultResponse<T>>,
 }
 
 /// Token data, used in `VaultResponse`
@@ -228,7 +228,7 @@ impl<'a> VaultClient<'a, TokenData> {
             host: host,
             token: token.to_string(),
             client: client,
-            data: decoded,
+            data: Some(decoded),
         })
     }
 }
@@ -261,7 +261,22 @@ impl<'a> VaultClient<'a, ()> {
             host: host,
             token: token,
             client: client,
-            data: decoded,
+            data: Some(decoded),
+        })
+    }
+
+    /// Construct a `VaultClient` where no lookup is done through vault since it is assumed that the
+    /// provided token is a one use token.
+    ///
+    /// A common use case for this method is when a `wrapping_token` has been received and you want
+    /// to query the `cubbyhole/response` endpoint.
+    pub fn new_no_lookup(host: &'a str, token: &'a str) -> Result<VaultClient<'a, ()>> {
+        let client = Client::new();
+        Ok(VaultClient {
+            host: host,
+            token: token.to_string(),
+            client: client,
+            data: None,
         })
     }
 }
@@ -273,7 +288,9 @@ impl<'a, T> VaultClient<'a, T>
     pub fn renew(&mut self) -> Result<()> {
         let mut res = try!(self.post(&format!("{}/v1/auth/token/renew-self", self.host), None));
         let vault_res: VaultResponse<T> = try!(parse_vault_response(&mut res));
-        self.data.auth = vault_res.auth;
+        if let Some(ref mut data) = self.data {
+            data.auth = vault_res.auth;
+        }
         Ok(())
     }
 
